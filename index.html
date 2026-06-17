@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2D Gravity Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Interactive N-body sandbox</p>
+          <h1>2D Gravity Simulation</h1>
+          <p class="intro">
+            Drag bodies to set starting positions, edit their masses, and add or remove
+            bodies to explore orbital motion in a simplified gravity model.
+          </p>
+        </div>
+        <div class="global-controls" aria-label="Simulation controls">
+          <button id="playPause" type="button">Pause</button>
+          <button id="reset" type="button" class="secondary">Reset</button>
+          <button id="addBody" type="button" class="accent">Add body</button>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="canvas-card">
+          <canvas id="simulation" width="960" height="620" aria-label="2D gravity simulation canvas"></canvas>
+          <p class="hint">Tip: pause, drag a body to a new initial position, adjust mass, then press play.</p>
+        </div>
+
+        <aside class="panel" aria-label="Body settings">
+          <div class="panel-header">
+            <h2>Bodies</h2>
+            <span id="bodyCount" class="count"></span>
+          </div>
+          <div id="bodyControls" class="body-controls"></div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
