@@ -11,6 +11,14 @@ const softening = 90;
 const maxBodies = 10;
 const minBodies = 1;
 const colors = ['#77e1ff', '#f7bf5b', '#ff6b8a', '#9cff8f', '#b796ff', '#ff9ee8', '#9df5d7', '#ffad7a', '#b9d7ff', '#d7ff7a'];
+const fallbackWidth = 960;
+const fallbackHeight = 620;
+const stars = Array.from({ length: 120 }, (_, index) => ({
+  x: (Math.sin(index * 91.7) + 1) / 2,
+  y: (Math.cos(index * 47.3) + 1) / 2,
+  r: 0.45 + (index % 4) * 0.22,
+  alpha: 0.18 + (index % 5) * 0.09,
+}));
 
 let bodies = [];
 let running = true;
@@ -18,33 +26,79 @@ let draggedBody = null;
 let lastTime = performance.now();
 let nextId = 1;
 
+function simulationWidth() {
+  return canvas.width || fallbackWidth;
+}
+
+function simulationHeight() {
+  return canvas.height || fallbackHeight;
+}
+
+function makeBody(name, xRatio, yRatio, vx, vy, mass, color) {
+  return {
+    id: nextId++,
+    name,
+    x: simulationWidth() * xRatio,
+    y: simulationHeight() * yRatio,
+    vx,
+    vy,
+    mass,
+    color,
+    trail: [],
+  };
+}
+
 function defaultBodies() {
   return [
-    { id: nextId++, name: 'Body 1', x: 420, y: 310, vx: 0, vy: -0.58, mass: 120, color: colors[0], trail: [] },
-    { id: nextId++, name: 'Body 2', x: 560, y: 310, vx: 0, vy: 0.58, mass: 120, color: colors[1], trail: [] },
-    { id: nextId++, name: 'Body 3', x: 490, y: 190, vx: 0.72, vy: 0, mass: 80, color: colors[2], trail: [] },
+    makeBody('Body 1', 0.39, 0.52, 0.05, -0.62, 135, colors[0]),
+    makeBody('Body 2', 0.61, 0.52, -0.05, 0.62, 135, colors[1]),
+    makeBody('Body 3', 0.50, 0.30, 0.78, 0, 90, colors[2]),
   ];
+}
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const width = Math.max(320, Math.round(rect.width || fallbackWidth));
+  const height = Math.max(280, Math.round(rect.height || fallbackHeight));
+  if (canvas.width === width && canvas.height === height) return;
+
+  const oldWidth = simulationWidth();
+  const oldHeight = simulationHeight();
+  canvas.width = width;
+  canvas.height = height;
+
+  if (!bodies.length) return;
+  bodies.forEach((body) => {
+    body.x = body.x / oldWidth * width;
+    body.y = body.y / oldHeight * height;
+    body.trail = body.trail.map((point) => ({
+      x: point.x / oldWidth * width,
+      y: point.y / oldHeight * height,
+    }));
+  });
 }
 
 function resetSimulation() {
   nextId = 1;
+  resizeCanvas();
   bodies = defaultBodies();
   renderControls();
+  draw();
 }
 
 function radiusFor(mass) {
-  return Math.max(8, Math.sqrt(mass) * 1.25);
+  return Math.max(10, Math.sqrt(mass) * 1.45);
 }
 
 function addBody() {
   if (bodies.length >= maxBodies) return;
   const angle = (Math.PI * 2 * bodies.length) / maxBodies;
-  const distance = 90 + bodies.length * 12;
+  const distance = Math.min(simulationWidth(), simulationHeight()) * (0.16 + bodies.length * 0.015);
   bodies.push({
     id: nextId,
     name: `Body ${nextId}`,
-    x: canvas.width / 2 + Math.cos(angle) * distance,
-    y: canvas.height / 2 + Math.sin(angle) * distance,
+    x: simulationWidth() / 2 + Math.cos(angle) * distance,
+    y: simulationHeight() / 2 + Math.sin(angle) * distance,
     vx: Math.sin(angle) * 0.35,
     vy: -Math.cos(angle) * 0.35,
     mass: 70,
@@ -122,42 +176,74 @@ function update(dt) {
     body.vy += accelerations[index].y * dt;
     body.x += body.vx * dt;
     body.y += body.vy * dt;
-    if (body.x < 0 || body.x > canvas.width) body.vx *= -0.85;
-    if (body.y < 0 || body.y > canvas.height) body.vy *= -0.85;
-    body.x = Math.max(0, Math.min(canvas.width, body.x));
-    body.y = Math.max(0, Math.min(canvas.height, body.y));
+    if (body.x < 0 || body.x > simulationWidth()) body.vx *= -0.85;
+    if (body.y < 0 || body.y > simulationHeight()) body.vy *= -0.85;
+    body.x = Math.max(0, Math.min(simulationWidth(), body.x));
+    body.y = Math.max(0, Math.min(simulationHeight(), body.y));
     body.trail.push({ x: body.x, y: body.y });
-    if (body.trail.length > 140) body.trail.shift();
+    if (body.trail.length > 160) body.trail.shift();
   });
 }
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#030712';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  bodies.forEach((body) => {
+function drawBackground() {
+  const width = simulationWidth();
+  const height = simulationHeight();
+  const gradient = ctx.createRadialGradient(width * 0.5, height * 0.48, 10, width * 0.5, height * 0.5, Math.max(width, height) * 0.72);
+  gradient.addColorStop(0, '#102445');
+  gradient.addColorStop(0.55, '#061124');
+  gradient.addColorStop(1, '#02050d');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  stars.forEach((star) => {
+    ctx.globalAlpha = star.alpha;
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    body.trail.forEach((point, index) => {
-      ctx.globalAlpha = index / body.trail.length * 0.42;
-      index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y);
-    });
-    ctx.strokeStyle = body.color;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    const radius = radiusFor(body.mass);
-    const gradient = ctx.createRadialGradient(body.x - radius / 3, body.y - radius / 3, 2, body.x, body.y, radius * 1.8);
-    gradient.addColorStop(0, '#ffffff');
-    gradient.addColorStop(0.18, body.color);
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(body.x, body.y, radius * 1.8, 0, Math.PI * 2);
+    ctx.arc(star.x * width, star.y * height, star.r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = body.color;
+  });
+  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  resizeCanvas();
+  ctx.clearRect(0, 0, simulationWidth(), simulationHeight());
+  drawBackground();
+
+  bodies.forEach((body) => {
+    if (body.trail.length > 1) {
+      ctx.beginPath();
+      body.trail.forEach((point, index) => {
+        ctx.globalAlpha = Math.max(0.08, index / body.trail.length * 0.55);
+        index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y);
+      });
+      ctx.strokeStyle = body.color;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    const radius = radiusFor(body.mass);
+    const glow = ctx.createRadialGradient(body.x, body.y, radius * 0.2, body.x, body.y, radius * 3.2);
+    glow.addColorStop(0, body.color);
+    glow.addColorStop(0.35, `${body.color}88`);
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(body.x, body.y, radius * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    const gradient = ctx.createRadialGradient(body.x - radius / 3, body.y - radius / 3, 2, body.x, body.y, radius);
+    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(0.25, body.color);
+    gradient.addColorStop(1, '#0f172a');
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   });
 }
 
@@ -171,7 +257,7 @@ function animationLoop(now) {
 
 function pointerPosition(event) {
   const rect = canvas.getBoundingClientRect();
-  return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height };
+  return { x: (event.clientX - rect.left) * simulationWidth() / rect.width, y: (event.clientY - rect.top) * simulationHeight() / rect.height };
 }
 
 canvas.addEventListener('pointerdown', (event) => {
@@ -187,8 +273,8 @@ canvas.addEventListener('pointerdown', (event) => {
 canvas.addEventListener('pointermove', (event) => {
   if (!draggedBody) return;
   const point = pointerPosition(event);
-  draggedBody.x = Math.max(0, Math.min(canvas.width, point.x));
-  draggedBody.y = Math.max(0, Math.min(canvas.height, point.y));
+  draggedBody.x = Math.max(0, Math.min(simulationWidth(), point.x));
+  draggedBody.y = Math.max(0, Math.min(simulationHeight(), point.y));
   renderControls();
 });
 
@@ -197,6 +283,8 @@ canvas.addEventListener('pointerup', (event) => {
   draggedBody = null;
   canvas.classList.remove('dragging');
 });
+
+window.addEventListener('resize', resizeCanvas);
 
 playPause.addEventListener('click', () => {
   running = !running;
